@@ -78,7 +78,7 @@ function run_all_factors(sys, vars, n_runs=100, by_factor=false, radii=[1e-1, 1e
 		    end
 
 		   	if !success
-	        	println("fail")
+		   		println("fail")
 				total += length(radii)
 	        	fail += length(radii)
 		    	for radius in radii
@@ -87,12 +87,16 @@ function run_all_factors(sys, vars, n_runs=100, by_factor=false, radii=[1e-1, 1e
 	        	continue
 	        end
 
+	        # plane_radius = get_radius(factor, vars, zero_point, delta)
+	        # println("Plane radius: ", plane_radius)
+
 		    for radius in radii
 				next!(pbar)
 				total += 1
 
 				use_gradient = true
 
+				# radius = plane_radius * 0.1
 				solution_1 = [zero_point[i] + delta[i] * radius for i in 1:length(zero_point)]
 				omega = (-1 + 0*im)^(2/3)
 
@@ -116,33 +120,48 @@ function run_all_factors(sys, vars, n_runs=100, by_factor=false, radii=[1e-1, 1e
 					extended_precision=true
 				)
 
-				res = HomotopyContinuation.solve(sysp, solution_1; start_parameters=vals_1, target_parameters=vals_2, compile=true, tracker_options=tracker_options)
-				if length(solutions(res)) == 0
-					fail += 1
-					continue
-				end
-				solution_2 = solutions(res)[1]
+				solution_4 = solution_1
+				N_max_loops = 1
+				found_result = false
 
-				res = HomotopyContinuation.solve(sysp, solution_2; start_parameters=vals_2, target_parameters=vals_3, compile=true, tracker_options=tracker_options)
-				if length(solutions(res)) == 0
-					fail += 1
-					continue
-				end
-				solution_3 = solutions(res)[1]
+				for loop_iter in 1:N_max_loops
+					res = HomotopyContinuation.solve(sysp, solution_4; start_parameters=vals_1, target_parameters=vals_2, compile=true, tracker_options=tracker_options)
+					if length(solutions(res)) == 0
+						fail += 1
+						found_result = true
+						break
+					end
+					solution_2 = solutions(res)[1]
 
-				res = HomotopyContinuation.solve(sysp, solution_3; start_parameters=vals_3, target_parameters=vals_1, compile=true, tracker_options=tracker_options)
-				if length(solutions(res)) == 0
-					fail += 1
-					continue
-				end
-				solution_4 = solutions(res)[1]
+					res = HomotopyContinuation.solve(sysp, solution_2; start_parameters=vals_2, target_parameters=vals_3, compile=true, tracker_options=tracker_options)
+					if length(solutions(res)) == 0
+						fail += 1
+						found_result = true
+						break
+					end
+					solution_3 = solutions(res)[1]
 
-				if norm(solution_1 .- solution_4) < 1e-8
-					same_solution += 1
-				elseif norm(sys_with_vals[end](vars => solution_4)) > 1e-6
+					res = HomotopyContinuation.solve(sysp, solution_3; start_parameters=vals_3, target_parameters=vals_1, compile=true, tracker_options=tracker_options)
+					if length(solutions(res)) == 0
+						fail += 1
+						found_result = true
+						break
+					end
+					solution_4 = solutions(res)[1]
+
+					if norm(solution_1 .- solution_4) < 1e-6
+						same_solution += 1
+						found_result = true
+						break
+					elseif norm(sys_with_vals[end](vars => solution_4)) < 1e-8
+						good += 1
+						found_result = true
+						break
+					end
+				end
+
+				if !found_result
 					bad_solution += 1
-				else
-					good += 1
 				end
 			end
 		end

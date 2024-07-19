@@ -48,15 +48,27 @@ function get_root_and_direction(factor, vars)
 	N = length(vars)
     CC = AcbField(64)
     R_univar, t = polynomial_ring(CC, "t")
-    random_linear = [(1. + rand() / 100) * t + rand() for i in 1:N]
+    # random_linear = [(1. + rand() / 100) * t + rand() for i in 1:N]
+    random_linear = [(1. + rand()) * t + rand() for i in 1:N]
 
     all_roots = []
     all_roots_2 = []
 
     P = factor(random_linear...)
+    # println("Total roots ", length(roots(P)))
     rt = roots(P)[1]
-    root = [convert(ComplexF64, evaluate2(r, rt)[1]) for r in random_linear]
-    root_2 = [evaluate2(r, rt)[1] for r in random_linear]
+    root = [convert(ComplexF64, r(rt)) for r in random_linear]
+    root_2 = [r(rt) for r in random_linear]
+
+    dist_min = 1e9
+    for rt in roots(P)[2:end]
+    	other_root = [convert(ComplexF64, r(rt)) for r in random_linear]
+    	dist_new = norm(root - other_root)
+    	if dist_new < dist_min
+    		dist_min = dist_new
+    	end
+    end
+    # println(dist_min)
 
     Rc, varsc = polynomial_ring(CC, [string(v) for v in vars], internal_ordering=:lex)
     p = factor(varsc...)
@@ -68,11 +80,37 @@ function get_root_and_direction(factor, vars)
     (root, dir)
 end
 
+function get_radius(factor, vars, zero_point, dir)
+	N = length(vars)
+    CC = AcbField(64)
+    R_univar, t = polynomial_ring(CC, "t")
+    random_linear = [dir[i] * t + zero_point[i] for i in 1:N]
+
+    P = factor(random_linear...)
+    # println("Total roots ", length(roots(P)))
+    radius = 10.
+
+    try
+	    for rt in roots(P)
+	    	point_new = [convert(ComplexF64, r(rt)) for r in random_linear]
+	    	radius_new = norm(point_new - zero_point)
+	    	if 1e-6 < radius_new && radius_new < radius
+	    		radius = radius_new
+	    	end
+	    end
+	catch e
+	    return radius
+	end
+
+    radius
+end
+
 function get_root_and_direction_J(J, factor, vars)
 	N = length(vars)
 	CC = AcbField(64)
 	_, t = polynomial_ring(CC, "t")
-	random_linear = [i * t + rand() for i in 1:N]
+	# random_linear = [i * t + rand() for i in 1:N]
+    random_linear = [(1. + rand()) * t + rand() for i in 1:N]
 
 	all_roots = []
 	all_roots_2 = []
@@ -165,14 +203,16 @@ function run_random_monodromy(sys, vars, n_runs=1000)
 	    total += length(mres.loops)
 
 	    for new_solution in solutions(mres)
-	        if norm(my_vals .- new_solution) < 1e-4
+	        if norm(my_vals .- new_solution) < 1e-6
 	            # println("Same solution")
 	            same_solution += 1
-	        elseif norm(sys_with_vals[end](vars => new_solution)) > 1e-4
+	        elseif norm(sys_with_vals[end](vars => new_solution)) > 1e-6
 	            # println("Bad solution")
 	            bad_solution += 1
 	        else
 	            # println("Good solution!")
+	            println(new_solution)
+	            println(my_vals)
 	            good += 1
 	            break
 	        end
